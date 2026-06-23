@@ -205,6 +205,9 @@ input[readonly]{background:#fff;color:#222;font-weight:400}
       <button class="nav-item" data-tip="Export to Excel" onclick="exportToExcel()">
         <span class="nav-icon">⬇</span><span class="nav-label">Export to Excel</span>
       </button>
+      <button class="nav-item" data-tip="Import from Excel" onclick="showImportModal()">
+        <span class="nav-icon">⬆</span><span class="nav-label">Import from Excel</span>
+      </button>
       <button class="nav-item" data-tip="Backup & Restore" onclick="showBackupModal()">
         <span class="nav-icon">💾</span><span class="nav-label">Backup & Restore</span>
       </button>
@@ -447,6 +450,69 @@ input[readonly]{background:#fff;color:#222;font-weight:400}
 
     <div style="text-align:center">
       <button onclick="closeBackupModal()" style="background:#eee;color:#333;border:none;padding:8px 24px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT FROM EXCEL MODAL -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal-box" style="max-width:500px;text-align:left;max-height:90vh;overflow-y:auto">
+    <h3 style="text-align:center;margin-bottom:6px">⬆ Import from Excel</h3>
+    <p style="text-align:center;font-size:12px;color:#888;margin-bottom:18px">Bulk-add products from an Excel file — no manual entry needed</p>
+
+    <div style="background:#eef6ff;border:1px solid #1a6fc4;border-radius:8px;padding:14px;margin-bottom:14px">
+      <div style="font-weight:700;color:#1a6fc4;margin-bottom:8px;font-size:13px">📋 Expected columns</div>
+      <div style="font-size:12px;color:#555;line-height:1.7">
+        Your sheet should have a header row with these columns (any order):
+        <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12px">
+          <tr style="background:#fff">
+            <td style="border:1px solid #cfe0f5;padding:6px 8px;font-weight:700">Product ID</td>
+            <td style="border:1px solid #cfe0f5;padding:6px 8px;font-weight:700">Product name</td>
+            <td style="border:1px solid #cfe0f5;padding:6px 8px;font-weight:700">Picture</td>
+          </tr>
+          <tr style="background:#fff">
+            <td style="border:1px solid #cfe0f5;padding:6px 8px;color:#888">4111372</td>
+            <td style="border:1px solid #cfe0f5;padding:6px 8px;color:#888">Product name…</td>
+            <td style="border:1px solid #cfe0f5;padding:6px 8px;color:#888">🖼 (in-cell image)</td>
+          </tr>
+        </table>
+        <div style="margin-top:8px;color:#777">Pictures must be inserted <b>inside the cell</b> (Insert ▸ Picture ▸ Place in Cell). Existing products with the same ID are updated; barcodes &amp; dimensions are preserved.</div>
+      </div>
+    </div>
+
+    <div style="background:#fff3e0;border:1px solid #f39c12;border-radius:8px;padding:14px;margin-bottom:14px">
+      <div style="font-weight:700;color:#e67e22;margin-bottom:8px;font-size:13px">📂 Choose your Excel file</div>
+      <input type="file" id="importFile" accept=".xlsx" style="display:none" onchange="doImport(this)">
+      <button onclick="document.getElementById('importFile').click()" style="background:#e67e22;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;width:100%">📂 Select .xlsx File to Import</button>
+    </div>
+
+    <div id="importStatus" style="display:none;padding:10px;border-radius:6px;font-size:12px;margin-bottom:12px;text-align:center"></div>
+
+    <!-- DUPLICATE DECISION PROMPT -->
+    <div id="dupChoice" style="display:none;background:#fff8e1;border:1px solid #f39c12;border-radius:8px;padding:14px;margin-bottom:12px">
+      <div id="dupSummary" style="font-size:12px;color:#444;background:#fff;border:1px solid #eee;border-radius:6px;padding:8px 10px;margin-bottom:10px"></div>
+      <div style="font-weight:700;color:#e67e22;font-size:13px;margin-bottom:6px">⚠ <span id="dupCount">0</span> product(s) already exist</div>
+      <div style="font-size:12px;color:#666;margin-bottom:8px">Tick the ones to <b>replace</b>; unticked ones are <b>skipped</b>. New products are always added.</div>
+      <label style="display:flex;align-items:center;gap:8px;padding:7px 8px;background:#fff;border:1px solid #eee;border-bottom:none;border-radius:6px 6px 0 0;font-size:12px;font-weight:700;color:#333;cursor:pointer">
+        <input type="checkbox" id="dupSelectAll" checked onchange="_toggleAllDup(this)">
+        Select all
+        <span id="dupSelInfo" style="margin-left:auto;font-weight:500;color:#888"></span>
+      </label>
+      <div id="dupChoiceList" style="max-height:200px;overflow-y:auto;background:#fff;border:1px solid #eee;border-radius:0 0 6px 6px;padding:2px 0;margin-bottom:12px;font-size:12px"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="_applyDupSelection()" style="flex:1;background:#1a6fc4;color:#fff;border:none;padding:9px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✓ Apply</button>
+        <button onclick="_resolveDup('cancel')" style="background:#eee;color:#333;border:none;padding:9px 18px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+
+    <!-- POST-IMPORT DUPLICATE REPORT -->
+    <div id="dupReport" style="display:none;background:#fbfbfb;border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:12px">
+      <div style="font-weight:700;color:#444;font-size:13px;margin-bottom:8px">📋 Duplicates found (<span id="dupReportCount">0</span>)</div>
+      <div id="dupReportList" style="max-height:170px;overflow-y:auto;font-size:12px"></div>
+    </div>
+
+    <div style="text-align:center">
+      <button onclick="closeImportModal()" style="background:#eee;color:#333;border:none;padding:8px 24px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Close</button>
     </div>
   </div>
 </div>
@@ -890,6 +956,403 @@ window.doRestore = async function(input) {
   } catch(e) {
     statusEl.style.cssText='display:block;padding:10px;border-radius:6px;background:#fff0f0;border:1px solid #e74c3c;color:#e74c3c;font-size:12px;text-align:center;margin-bottom:10px';
     statusEl.textContent='❌ Error: '+e.message;
+  }
+};
+
+// ── IMPORT FROM EXCEL (Product ID + Product name + in-cell Picture) ────────
+// Reads .xlsx with native APIs only — unzips with DecompressionStream and
+// resolves Excel's "image in cell" rich-data (_localImage) chain to the
+// embedded JPEG/PNG in xl/media. No external library needed.
+
+window.showImportModal = function() {
+  document.getElementById('importModal').classList.add('show');
+  document.getElementById('importStatus').style.display='none';
+  document.getElementById('dupChoice').style.display='none';
+  document.getElementById('dupReport').style.display='none';
+  document.getElementById('importFile').value='';
+};
+window.closeImportModal = function() {
+  document.getElementById('importModal').classList.remove('show');
+};
+
+// Duplicate decision prompt — resolves with a Set of row-keys to replace, or 'cancel'
+let _dupResolver = null;
+function _askDuplicateChoice(dupList, newList) {
+  return new Promise(resolve => {
+    _dupResolver = resolve;
+    const total = dupList.length + newList.length;
+    let summary = `📦 <b>${total}</b> product(s) in file — <b style="color:#27ae60">${newList.length} new</b> (added regardless), <b style="color:#e67e22">${dupList.length} existing</b> (choose below).`;
+    if (newList.length) {
+      const preview = newList.slice(0, 8).map(n => `${n.id} ${n.name ? '– ' + n.name : ''}`.trim());
+      summary += `<div style="margin-top:6px;color:#666"><b>New:</b> ` + preview.join('; ') +
+        (newList.length > 8 ? ` …and ${newList.length - 8} more` : '') + `</div>`;
+    }
+    document.getElementById('dupSummary').innerHTML = summary;
+    document.getElementById('dupCount').textContent = dupList.length;
+    document.getElementById('dupChoiceList').innerHTML = dupList.map(d => `
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid #f3f3f3;cursor:pointer">
+        <input type="checkbox" class="dupcb" value="${d.key}" checked onchange="_updateDupCount()">
+        <span style="font-weight:600;color:#333">${d.id}</span>
+        <span style="color:#666;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name || '<i style=color:#bbb>(no name)</i>'}</span>
+        <span style="color:#e67e22;font-size:11px;white-space:nowrap">${d.matched}</span>
+      </label>`).join('');
+    const master = document.getElementById('dupSelectAll');
+    if (master) { master.checked = true; master.indeterminate = false; }
+    _updateDupCount();
+    document.getElementById('dupChoice').style.display = 'block';
+  });
+}
+window._toggleAllDup = function(master) {
+  document.querySelectorAll('#dupChoiceList .dupcb').forEach(cb => cb.checked = master.checked);
+  _updateDupCount();
+};
+window._updateDupCount = function() {
+  const all = [...document.querySelectorAll('#dupChoiceList .dupcb')];
+  const checked = all.filter(cb => cb.checked).length;
+  const info = document.getElementById('dupSelInfo');
+  if (info) info.textContent = `${checked} to replace · ${all.length - checked} to skip`;
+  const master = document.getElementById('dupSelectAll');
+  if (master) { master.checked = checked === all.length; master.indeterminate = checked > 0 && checked < all.length; }
+};
+window._applyDupSelection = function() {
+  const set = new Set([...document.querySelectorAll('#dupChoiceList .dupcb')].filter(cb => cb.checked).map(cb => cb.value));
+  document.getElementById('dupChoice').style.display = 'none';
+  if (_dupResolver) { _dupResolver(set); _dupResolver = null; }
+};
+window._resolveDup = function(choice) {   // used for Cancel
+  document.getElementById('dupChoice').style.display = 'none';
+  if (_dupResolver) { _dupResolver(choice); _dupResolver = null; }
+};
+
+// --- streaming ZIP reader: reads only the bytes it needs via Blob.slice() ---
+// Never loads the whole file into memory, so multi-GB .xlsx files work.
+// Supports ZIP64 (needed once a file/offset crosses ~4 GB or 65535 entries).
+async function _openZip(file) {
+  const size = file.size;
+  const Z64 = 4294967296; // 2^32
+  const sliceBuf = async (start, end) =>
+    new Uint8Array(await file.slice(Math.max(0, start), Math.min(size, end)).arrayBuffer());
+
+  // locate End Of Central Directory by scanning the tail
+  const tailLen = Math.min(size, 65557); // 22-byte EOCD + max 65535 comment
+  const tail = await sliceBuf(size - tailLen, size);
+  const tdv = new DataView(tail.buffer);
+  let e = -1;
+  for (let i = tail.length - 22; i >= 0; i--) {
+    if (tdv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  }
+  if (e < 0) throw new Error('Not a valid .xlsx file (EOCD not found)');
+
+  let cdCount  = tdv.getUint16(e + 10, true);
+  let cdSize   = tdv.getUint32(e + 12, true);
+  let cdOffset = tdv.getUint32(e + 16, true);
+
+  // ZIP64 end-of-central-directory locator sits 20 bytes before the EOCD
+  const locPos = e - 20;
+  if (locPos >= 0 && tdv.getUint32(locPos, true) === 0x07064b50) {
+    const z64Off = tdv.getUint32(locPos + 8, true) + tdv.getUint32(locPos + 12, true) * Z64;
+    const z = await sliceBuf(z64Off, z64Off + 56);
+    const zdv = new DataView(z.buffer);
+    if (zdv.getUint32(0, true) === 0x06064b50) {
+      cdCount  = zdv.getUint32(24, true) + zdv.getUint32(28, true) * Z64;
+      cdSize   = zdv.getUint32(40, true) + zdv.getUint32(44, true) * Z64;
+      cdOffset = zdv.getUint32(48, true) + zdv.getUint32(52, true) * Z64;
+    }
+  }
+
+  // read the whole central directory (small — KBs to a few MB)
+  const cd  = await sliceBuf(cdOffset, cdOffset + cdSize);
+  const cdv = new DataView(cd.buffer);
+  const dec = new TextDecoder();
+  const files = {};
+  let p = 0;
+  for (let n = 0; n < cdCount; n++) {
+    if (cdv.getUint32(p, true) !== 0x02014b50) break;
+    const method     = cdv.getUint16(p + 10, true);
+    let   compSize   = cdv.getUint32(p + 20, true);
+    const uncompCD   = cdv.getUint32(p + 24, true);
+    const nameLen    = cdv.getUint16(p + 28, true);
+    const extraLen   = cdv.getUint16(p + 30, true);
+    const commentLen = cdv.getUint16(p + 32, true);
+    let   localOff   = cdv.getUint32(p + 42, true);
+    const name = dec.decode(cd.subarray(p + 46, p + 46 + nameLen));
+    // resolve 64-bit values from the ZIP64 extra field when placeholders are present
+    if (compSize === 0xFFFFFFFF || localOff === 0xFFFFFFFF) {
+      let ep = p + 46 + nameLen; const extraEnd = ep + extraLen;
+      while (ep + 4 <= extraEnd) {
+        const hid = cdv.getUint16(ep, true), hsz = cdv.getUint16(ep + 2, true);
+        if (hid === 0x0001) {
+          let q = ep + 4;
+          if (uncompCD === 0xFFFFFFFF) q += 8;                                   // original size (skip)
+          if (compSize === 0xFFFFFFFF) { compSize = cdv.getUint32(q, true) + cdv.getUint32(q + 4, true) * Z64; q += 8; }
+          if (localOff === 0xFFFFFFFF) { localOff = cdv.getUint32(q, true) + cdv.getUint32(q + 4, true) * Z64; q += 8; }
+          break;
+        }
+        ep += 4 + hsz;
+      }
+    }
+    files[name] = { method, compSize, localOff };
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+
+  async function extractBytes(name) {
+    const f = files[name];
+    if (!f) return null;
+    // read the 30-byte local header to learn its name/extra field lengths
+    const lh = await sliceBuf(f.localOff, f.localOff + 30);
+    const ldv = new DataView(lh.buffer);
+    if (ldv.getUint32(0, true) !== 0x04034b50) throw new Error('Bad ZIP entry: ' + name);
+    const dataStart = f.localOff + 30 + ldv.getUint16(26, true) + ldv.getUint16(28, true);
+    const comp = await sliceBuf(dataStart, dataStart + f.compSize);
+    if (f.method === 0) return comp;                   // stored
+    if (f.method === 8) {                              // deflate
+      const ds = new DecompressionStream('deflate-raw');
+      const stream = new Blob([comp]).stream().pipeThrough(ds);
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    throw new Error('Unsupported compression in .xlsx');
+  }
+  const extractText = async name => { const b = await extractBytes(name); return b ? dec.decode(b) : null; };
+  return { files, extractBytes, extractText };
+}
+
+function _bytesToBase64(bytes) {
+  let bin = ''; const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+function _normPath(p) {
+  const out = [];
+  p.split('/').forEach(seg => {
+    if (seg === '..') out.pop();
+    else if (seg && seg !== '.') out.push(seg);
+  });
+  return out.join('/');
+}
+
+// Parse the workbook → { rows:[{id,name,imagePath}], zip }
+// Only small parts (sheet/strings/metadata) are read here; images stay on
+// disk and are pulled one at a time during import to keep memory flat.
+async function _parseProductExcel(file) {
+  const zip = await _openZip(file);
+  const getXml = async n => { const t = await zip.extractText(n); return t ? new DOMParser().parseFromString(t, 'application/xml') : null; };
+  const tags   = (node, local) => node ? [...node.getElementsByTagNameNS('*', local)] : [];
+  const R_NS   = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+  // shared strings
+  const ssDoc = await getXml('xl/sharedStrings.xml');
+  const shared = tags(ssDoc, 'si').map(si => tags(si, 't').map(t => t.textContent).join(''));
+
+  // --- build the vm(1-based) -> media path resolver (rich-data chain) ---
+  const metaDoc = await getXml('xl/metadata.xml');
+  const rvDoc   = await getXml('xl/richData/rdrichvalue.xml');
+  const rvrDoc  = await getXml('xl/richData/richValueRel.xml');
+  const relsDoc = await getXml('xl/richData/_rels/richValueRel.xml.rels');
+
+  const relMap = {};
+  tags(relsDoc, 'Relationship').forEach(r => { relMap[r.getAttribute('Id')] = r.getAttribute('Target'); });
+  const relIds = tags(rvrDoc, 'rel').map(rel => rel.getAttributeNS(R_NS, 'id') || rel.getAttribute('r:id'));
+  const rvRelIdx = tags(rvDoc, 'rv').map(rv => { const v = tags(rv, 'v')[0]; return v ? parseInt(v.textContent, 10) : -1; });
+  let futureRvb = [];
+  const fm = tags(metaDoc, 'futureMetadata').find(f => f.getAttribute('name') === 'XLRICHVALUE');
+  if (fm) futureRvb = tags(fm, 'bk').map(bk => { const r = tags(bk, 'rvb')[0]; return r ? parseInt(r.getAttribute('i'), 10) : -1; });
+  let vmFuture = [];
+  const vmEl = tags(metaDoc, 'valueMetadata')[0];
+  if (vmEl) vmFuture = tags(vmEl, 'bk').map(bk => { const rc = tags(bk, 'rc')[0]; return rc ? parseInt(rc.getAttribute('v'), 10) : -1; });
+
+  function pathForVm(vm) {
+    const vi = vm - 1;
+    const fi = vmFuture[vi];   if (fi == null || fi < 0) return null;
+    const ri = futureRvb[fi];  if (ri == null || ri < 0) return null;
+    const li = rvRelIdx[ri];   if (li == null || li < 0) return null;
+    const rId = relIds[li];    if (!rId) return null;
+    const target = relMap[rId];if (!target) return null;
+    return _normPath('xl/richData/' + target);   // ../media/x.jpeg -> xl/media/x.jpeg
+  }
+
+  // --- pick worksheet (default sheet1, else first sheet present) ---
+  let sheetName = 'xl/worksheets/sheet1.xml';
+  if (!zip.files[sheetName]) {
+    const first = Object.keys(zip.files).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0];
+    if (first) sheetName = first;
+  }
+  const sheetDoc = await getXml(sheetName);
+  const colOf = ref => ref.replace(/[0-9]/g, '');
+  function cellText(c) {
+    if (!c) return '';
+    const t = c.getAttribute('t');
+    if (t === 's') { const v = tags(c, 'v')[0]; return v ? (shared[parseInt(v.textContent, 10)] || '') : ''; }
+    if (t === 'inlineStr') { const is = tags(c, 'is')[0]; return is ? tags(is, 't').map(x => x.textContent).join('') : ''; }
+    const v = tags(c, 'v')[0]; return v ? v.textContent : '';
+  }
+
+  const rows = tags(sheetDoc, 'row');
+  if (!rows.length) return { rows: [], zip };
+
+  // detect header columns from the first row
+  let idCol = 'A', nameCol = 'B', picCol = 'C', headerFound = false;
+  tags(rows[0], 'c').forEach(c => {
+    const txt = cellText(c).toLowerCase().trim();
+    const col = colOf(c.getAttribute('r'));
+    if (/product\s*id|item.?id|^id$|code/.test(txt))            { idCol = col;   headerFound = true; }
+    else if (/product\s*name|item.?name|name|descrip/.test(txt)) { nameCol = col; headerFound = true; }
+    else if (/picture|image|photo|pic/.test(txt))               { picCol = col;  headerFound = true; }
+  });
+  const dataRows = headerFound ? rows.slice(1) : rows;
+
+  const out = [];
+  for (const row of dataRows) {
+    const cells = {};
+    tags(row, 'c').forEach(c => { cells[colOf(c.getAttribute('r'))] = c; });
+    const id = cellText(cells[idCol]).trim();
+    if (!id) continue;                       // skip blank rows
+    const name = cellText(cells[nameCol]).trim();
+    let imagePath = null;
+    const pc = cells[picCol];
+    if (pc && pc.getAttribute('vm')) {
+      try { imagePath = pathForVm(parseInt(pc.getAttribute('vm'), 10)); } catch (e) { imagePath = null; }
+    }
+    out.push({ id, name, imagePath });
+  }
+  return { rows: out, zip };
+}
+
+// Read one media entry from the zip → compressed dataURL (max 400px, q0.6)
+async function _imageFromZip(zip, path) {
+  const bytes = await zip.extractBytes(path);
+  if (!bytes) return null;
+  const ext = path.split('.').pop().toLowerCase();
+  const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+  const full = `data:${mime};base64,` + _bytesToBase64(bytes);
+  return _compressDataUrl(full);
+}
+
+// Compress a dataURL the same way manual uploads are compressed (max 400px, q0.6)
+function _compressDataUrl(src) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 400; let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.6));
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+window.doImport = async function(input) {
+  const file = input.files[0]; if (!file) return;
+  const statusEl = document.getElementById('importStatus');
+  const setStatus = (msg, kind) => {
+    const colors = {
+      ok:   'background:#f0fff0;border:1px solid #27ae60;color:#27ae60',
+      warn: 'background:#fff8e1;border:1px solid #f39c12;color:#e67e22',
+      err:  'background:#fff0f0;border:1px solid #e74c3c;color:#e74c3c'
+    };
+    statusEl.style.cssText = 'display:block;padding:10px;border-radius:6px;font-size:12px;margin-bottom:12px;text-align:center;' + (colors[kind] || colors.warn);
+    statusEl.textContent = msg;
+  };
+
+  try {
+    document.getElementById('dupReport').style.display = 'none';
+    setStatus('⏳ Reading Excel file…', 'warn');
+    const { rows, zip } = await _parseProductExcel(file);
+    if (!rows.length) { setStatus('⚠ No products found. Check that the sheet has a Product ID column.', 'err'); return; }
+
+    // --- detect duplicates against existing products (by ID or by name) ---
+    const norm = s => (s || '').toString().toLowerCase().trim();
+    const dups = [], news = [];
+    let di = 0;
+    for (const r of rows) {
+      const byId   = window._products.find(x => x.id === r.id);
+      const byName = r.name && window._products.find(x => norm(x.name) === norm(r.name));
+      if (byId || byName) {
+        r._dup = true;
+        r._matched = (byId && byName) ? 'ID + name' : byId ? 'ID' : 'name';
+        r._dupKey = 'd' + (di++);
+        dups.push({ key: r._dupKey, id: r.id, name: r.name, matched: r._matched });
+      } else {
+        news.push({ id: r.id, name: r.name });
+      }
+    }
+
+    // --- per-product Replace/Skip selection when duplicates exist ---
+    let replaceSet = new Set();   // keys the user chose to replace
+    if (dups.length) {
+      setStatus(`Found ${dups.length} existing product(s) — choose which to replace…`, 'warn');
+      const res = await _askDuplicateChoice(dups, news);
+      if (res === 'cancel') { setStatus('Import cancelled — nothing changed.', 'warn'); return; }
+      replaceSet = res;           // Set of dup keys to replace; the rest are skipped
+    }
+
+    const total = rows.length;
+    let added = 0, replaced = 0, skippedDup = 0, withImg = 0, failed = 0;
+    for (const r of rows) {
+      if (r._dup && !replaceSet.has(r._dupKey)) { skippedDup++; continue; }  // user unticked → skip
+      setStatus(`⏳ Importing… ${added + replaced + skippedDup + failed}/${total}`, 'warn');
+      const ex = window._products.find(x => x.id === r.id);  // write target keyed by Product ID
+      let imageUrl = ex ? (ex.imageUrl || ex.image || null) : null;
+      let imageName = ex ? (ex.imageName || null) : null;
+      if (r.imagePath) {                 // pull + compress this one image from disk now
+        try {
+          const comp = await _imageFromZip(zip, r.imagePath);
+          if (comp) { imageUrl = comp; imageName = `${r.id}.jpg`; withImg++; }
+        } catch (e) { console.warn('Image read failed for', r.id, e.message); }
+      }
+      const docId = ex ? (ex._docId || ex.id) : r.id;
+      const product = {
+        id: r.id,
+        name: r.name || (ex ? ex.name : '') || '',
+        location: ex ? (ex.location || '') : '',
+        packSize: ex ? (ex.packSize || '') : '',
+        ti: ex ? (ex.ti || '') : '',
+        hi: ex ? (ex.hi || '') : '',
+        case: ex ? (ex.case || {}) : {},
+        pack: ex ? (ex.pack || {}) : {},
+        unit: ex ? (ex.unit || {}) : {},
+        imageUrl, imageName,
+        updatedAt: serverTimestamp(),
+        createdAt: ex ? (ex.createdAt || serverTimestamp()) : serverTimestamp()
+      };
+      try {
+        await setDoc(doc(db, 'products', docId), product);
+        if (r._dup) replaced++; else added++;
+      } catch (e) { failed++; console.warn('Import failed for', r.id, e.message); }
+    }
+
+    // --- final status + per-product duplicate report ---
+    const parts = [`${added} new`];
+    if (replaced)   parts.push(`${replaced} replaced`);
+    if (skippedDup) parts.push(`${skippedDup} skipped`);
+    if (failed)     parts.push(`${failed} failed`);
+    setStatus(`✅ Done — ${parts.join(', ')}. (${withImg} with photos)`, 'ok');
+
+    if (dups.length) {
+      document.getElementById('dupReportCount').textContent = dups.length;
+      document.getElementById('dupReportList').innerHTML = dups.map(d => {
+        const repl = replaceSet.has(d.key);
+        const action = repl ? 'Replaced' : 'Skipped';
+        const color  = repl ? '#1a6fc4' : '#7f8c8d';
+        return `
+        <div style="padding:5px 8px;border-bottom:1px solid #f3f3f3;display:flex;justify-content:space-between;gap:8px;align-items:center">
+          <span style="font-weight:600;color:#333">${d.id}</span>
+          <span style="color:#666;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name || '<i style=color:#bbb>(no name)</i>'}</span>
+          <span style="font-size:11px;color:#aaa">matched by ${d.matched}</span>
+          <span style="font-size:11px;font-weight:700;color:${color};white-space:nowrap">${action}</span>
+        </div>`;
+      }).join('');
+      document.getElementById('dupReport').style.display = 'block';
+    }
+
+    toast(`Import done — ${added} new, ${replaced} replaced ✓`);
+    input.value = '';
+  } catch (e) {
+    setStatus('❌ Error: ' + e.message, 'err');
   }
 };
 

@@ -465,7 +465,8 @@ input[readonly]{background:#fff;color:#222;font-weight:400}
       <div style="font-weight:700;color:#1a6fc4;margin-bottom:8px;font-size:13px">📋 Expected columns</div>
       <div style="font-size:12px;color:#555;line-height:1.7">
         Your sheet should have a header row with these columns (any order):
-        <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12px">
+        <div style="overflow-x:auto;margin-top:8px;border-radius:6px">
+        <table style="border-collapse:collapse;font-size:12px;white-space:nowrap">
           <tr style="background:#fff">
             <td style="border:1px solid #cfe0f5;padding:5px 7px;font-weight:700">Product ID</td>
             <td style="border:1px solid #cfe0f5;padding:5px 7px;font-weight:700">Product name</td>
@@ -478,14 +479,28 @@ input[readonly]{background:#fff;color:#222;font-weight:400}
           <tr style="background:#fff">
             <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">4111372</td>
             <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">Product name…</td>
-            <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">🖼 / blank</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">🖼 Place in cell</td>
             <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">1X30X1</td>
             <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">4</td>
             <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">2</td>
             <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">B12314</td>
           </tr>
         </table>
-        <div style="margin-top:8px;color:#777"><b>Product ID</b> is required; everything else is optional. <b>Pack_Size, TI, HI, Location_Product</b> are imported when present. A <b>blank Picture</b> cell keeps the existing photo (and imports faster) — only add a picture when you want to change it. Pictures must be inserted <b>inside the cell</b> (Insert ▸ Picture ▸ Place in Cell). Existing products are updated; barcodes &amp; dimensions are preserved.</div>
+        </div>
+        <div style="margin-top:8px;color:#777"><b>Product ID</b> is required; everything else is optional. Choose which columns to write using the checkboxes below. Pictures must be inserted <b>inside the cell</b> (Insert ▸ Picture ▸ Place in Cell); a blank Picture cell keeps the current photo. Barcodes &amp; dimensions are always preserved.</div>
+      </div>
+    </div>
+
+    <div style="background:#eef9f0;border:1px solid #27ae60;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-weight:700;color:#1e8e4e;margin-bottom:8px;font-size:13px">✅ Fields to update</div>
+      <div style="font-size:12px;color:#666;margin-bottom:8px">Only ticked fields are written to existing products. Unticked fields are left unchanged.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px 16px;font-size:13px;color:#333">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="fld_name" checked> Product name</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="fld_picture"> Picture</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="fld_packSize" checked> Pack_Size</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="fld_ti" checked> TI</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="fld_hi" checked> HI</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="fld_location" checked> Location_Product</label>
       </div>
     </div>
 
@@ -501,7 +516,7 @@ input[readonly]{background:#fff;color:#222;font-weight:400}
     <div id="dupChoice" style="display:none;background:#fff8e1;border:1px solid #f39c12;border-radius:8px;padding:14px;margin-bottom:12px">
       <div id="dupSummary" style="font-size:12px;color:#444;background:#fff;border:1px solid #eee;border-radius:6px;padding:8px 10px;margin-bottom:10px"></div>
       <div style="font-weight:700;color:#e67e22;font-size:13px;margin-bottom:6px">⚠ <span id="dupCount">0</span> product(s) already exist</div>
-      <div style="font-size:12px;color:#666;margin-bottom:8px">Tick the ones to <b>replace</b>; unticked ones are <b>skipped</b>. New products are always added.</div>
+      <div style="font-size:12px;color:#666;margin-bottom:8px">Tick = <b>replace</b> (updates name, Pack_Size, TI, HI, Location; photo is kept when the Picture cell is blank). Untick = <b>skip</b> (no change). New products are always added. Press <b>✓ Apply</b> to run.</div>
       <label style="display:flex;align-items:center;gap:8px;padding:7px 8px;background:#fff;border:1px solid #eee;border-bottom:none;border-radius:6px 6px 0 0;font-size:12px;font-weight:700;color:#333;cursor:pointer">
         <input type="checkbox" id="dupSelectAll" checked onchange="_toggleAllDup(this)">
         Select all
@@ -1360,6 +1375,16 @@ window.doImport = async function(input) {
       replaceSet = res;           // Set of dup keys to replace; the rest are skipped
     }
 
+    // --- which fields the user chose to write ---
+    const fields = {
+      name:     document.getElementById('fld_name').checked,
+      picture:  document.getElementById('fld_picture').checked,
+      packSize: document.getElementById('fld_packSize').checked,
+      ti:       document.getElementById('fld_ti').checked,
+      hi:       document.getElementById('fld_hi').checked,
+      location: document.getElementById('fld_location').checked
+    };
+
     const total = rows.length;
     let added = 0, replaced = 0, skippedDup = 0, withImg = 0, failed = 0;
     for (const r of rows) {
@@ -1368,20 +1393,27 @@ window.doImport = async function(input) {
       const ex = window._products.find(x => x.id === r.id);  // write target keyed by Product ID
       let imageUrl = ex ? (ex.imageUrl || ex.image || null) : null;
       let imageName = ex ? (ex.imageName || null) : null;
-      if (r.imagePath) {                 // pull + compress this one image from disk now
+      if (fields.picture && r.imagePath) {   // only touch the photo when "Picture" is ticked
         try {
           const comp = await _imageFromZip(zip, r.imagePath);
           if (comp) { imageUrl = comp; imageName = `${r.id}.jpg`; withImg++; }
         } catch (e) { console.warn('Image read failed for', r.id, e.message); }
       }
+      // for each field: write the imported value only if its box is ticked, else keep existing
+      const keep = (on, imported, exVal) => on ? (imported || exVal) : exVal;
+      const exName = ex ? (ex.name || '') : '';
+      const exLoc  = ex ? (ex.location || '') : '';
+      const exPack = ex ? (ex.packSize || '') : '';
+      const exTi   = ex ? (ex.ti || '') : '';
+      const exHi   = ex ? (ex.hi || '') : '';
       const docId = ex ? (ex._docId || ex.id) : r.id;
       const product = {
         id: r.id,
-        name: r.name || (ex ? ex.name : '') || '',
-        location: r.location || (ex ? (ex.location || '') : ''),
-        packSize: r.packSize || (ex ? (ex.packSize || '') : ''),
-        ti: r.ti || (ex ? (ex.ti || '') : ''),
-        hi: r.hi || (ex ? (ex.hi || '') : ''),
+        name: keep(fields.name, r.name, exName) || r.id,
+        location: keep(fields.location, r.location, exLoc),
+        packSize: keep(fields.packSize, r.packSize, exPack),
+        ti: keep(fields.ti, r.ti, exTi),
+        hi: keep(fields.hi, r.hi, exHi),
         case: ex ? (ex.case || {}) : {},
         pack: ex ? (ex.pack || {}) : {},
         unit: ex ? (ex.unit || {}) : {},

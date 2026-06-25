@@ -467,17 +467,25 @@ input[readonly]{background:#fff;color:#222;font-weight:400}
         Your sheet should have a header row with these columns (any order):
         <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12px">
           <tr style="background:#fff">
-            <td style="border:1px solid #cfe0f5;padding:6px 8px;font-weight:700">Product ID</td>
-            <td style="border:1px solid #cfe0f5;padding:6px 8px;font-weight:700">Product name</td>
-            <td style="border:1px solid #cfe0f5;padding:6px 8px;font-weight:700">Picture</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;font-weight:700">Product ID</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;font-weight:700">Product name</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;font-weight:700">Picture</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;font-weight:700">Pack_Size</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;font-weight:700">TI</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;font-weight:700">HI</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;font-weight:700">Location_Product</td>
           </tr>
           <tr style="background:#fff">
-            <td style="border:1px solid #cfe0f5;padding:6px 8px;color:#888">4111372</td>
-            <td style="border:1px solid #cfe0f5;padding:6px 8px;color:#888">Product name…</td>
-            <td style="border:1px solid #cfe0f5;padding:6px 8px;color:#888">🖼 (in-cell image)</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">4111372</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">Product name…</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">🖼 / blank</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">1X30X1</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">4</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">2</td>
+            <td style="border:1px solid #cfe0f5;padding:5px 7px;color:#888">B12314</td>
           </tr>
         </table>
-        <div style="margin-top:8px;color:#777">Pictures must be inserted <b>inside the cell</b> (Insert ▸ Picture ▸ Place in Cell). Existing products with the same ID are updated; barcodes &amp; dimensions are preserved.</div>
+        <div style="margin-top:8px;color:#777"><b>Product ID</b> is required; everything else is optional. <b>Pack_Size, TI, HI, Location_Product</b> are imported when present. A <b>blank Picture</b> cell keeps the existing photo (and imports faster) — only add a picture when you want to change it. Pictures must be inserted <b>inside the cell</b> (Insert ▸ Picture ▸ Place in Cell). Existing products are updated; barcodes &amp; dimensions are preserved.</div>
       </div>
     </div>
 
@@ -539,6 +547,16 @@ import { getFirestore, initializeFirestore, persistentLocalCache, persistentMult
 
 let db, unsubscribe;
 window._products = [];
+// Local IndexedDB cache only works on a real (https/localhost) origin — never on file://,
+// where the browser blocks IndexedDB and the DB listener would error out ("Offline").
+const _PERSIST_OK = (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') && typeof indexedDB !== 'undefined';
+function _makeDb(app) {
+  try {
+    return _PERSIST_OK
+      ? initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) })
+      : getFirestore(app);
+  } catch(_) { return getFirestore(app); }
+}
 window._editingId = null;
 window._deleteTargetId = null;
 window._currentImageBase64 = null;
@@ -584,9 +602,7 @@ window.connectFirebase = async function() {
   errEl.style.display='none';
   try {
     const app = initializeApp(cfg);
-    try {
-      db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
-    } catch(_) { db = getFirestore(app); }
+    db = _makeDb(app);
     localStorage.setItem('fb_cfg', JSON.stringify(cfg));
     startApp();
   } catch(e) { errEl.textContent='Connection error: '+e.message; errEl.style.display='block'; }
@@ -1236,12 +1252,17 @@ async function _parseProductExcel(file) {
 
   // detect header columns from the first row
   let idCol = 'A', nameCol = 'B', picCol = 'C', headerFound = false;
+  let packCol = null, tiCol = null, hiCol = null, locCol = null;
   tags(rows[0], 'c').forEach(c => {
     const txt = cellText(c).toLowerCase().trim();
     const col = colOf(c.getAttribute('r'));
     if (/product\s*id|item.?id|^id$|code/.test(txt))            { idCol = col;   headerFound = true; }
     else if (/product\s*name|item.?name|name|descrip/.test(txt)) { nameCol = col; headerFound = true; }
     else if (/picture|image|photo|pic/.test(txt))               { picCol = col;  headerFound = true; }
+    else if (/pack.?size/.test(txt))                            { packCol = col; headerFound = true; }
+    else if (txt === 'ti')                                      { tiCol = col;   headerFound = true; }
+    else if (txt === 'hi')                                      { hiCol = col;   headerFound = true; }
+    else if (/location/.test(txt))                              { locCol = col;  headerFound = true; }
   });
   const dataRows = headerFound ? rows.slice(1) : rows;
 
@@ -1254,10 +1275,16 @@ async function _parseProductExcel(file) {
     const name = cellText(cells[nameCol]).trim();
     let imagePath = null;
     const pc = cells[picCol];
-    if (pc && pc.getAttribute('vm')) {
+    if (pc && pc.getAttribute('vm')) {       // only when the cell actually holds an in-cell image
       try { imagePath = pathForVm(parseInt(pc.getAttribute('vm'), 10)); } catch (e) { imagePath = null; }
     }
-    out.push({ id, name, imagePath });
+    out.push({
+      id, name, imagePath,
+      packSize: packCol ? cellText(cells[packCol]).trim() : '',
+      ti:       tiCol   ? cellText(cells[tiCol]).trim()   : '',
+      hi:       hiCol   ? cellText(cells[hiCol]).trim()   : '',
+      location: locCol  ? cellText(cells[locCol]).trim()  : ''
+    });
   }
   return { rows: out, zip };
 }
@@ -1351,10 +1378,10 @@ window.doImport = async function(input) {
       const product = {
         id: r.id,
         name: r.name || (ex ? ex.name : '') || '',
-        location: ex ? (ex.location || '') : '',
-        packSize: ex ? (ex.packSize || '') : '',
-        ti: ex ? (ex.ti || '') : '',
-        hi: ex ? (ex.hi || '') : '',
+        location: r.location || (ex ? (ex.location || '') : ''),
+        packSize: r.packSize || (ex ? (ex.packSize || '') : ''),
+        ti: r.ti || (ex ? (ex.ti || '') : ''),
+        hi: r.hi || (ex ? (ex.hi || '') : ''),
         case: ex ? (ex.case || {}) : {},
         pack: ex ? (ex.pack || {}) : {},
         unit: ex ? (ex.unit || {}) : {},
@@ -1623,9 +1650,7 @@ function bootApp() {
     ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId']
       .forEach(k=>{ const el=document.getElementById('fb_'+k); if(el) el.value=FIREBASE_CONFIG[k]||''; });
     const app=initializeApp(FIREBASE_CONFIG);
-    try {
-      db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
-    } catch(_) { db = getFirestore(app); }
+    db = _makeDb(app);
     localStorage.setItem('fb_cfg',JSON.stringify(FIREBASE_CONFIG));
     startApp();
   }catch(e){
